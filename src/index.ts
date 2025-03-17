@@ -1,22 +1,15 @@
 import express from "express";
 import dotenv from "dotenv";
-import userRoutes from "./routes/user.routes";
+import scrapyRoutes from "./routes/scrapy.routes";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware para parsear JSON
 app.use(express.json());
-
-// Rutas de ejemplo
-app.get("/", (req, res) => {
-  res.send("¡Hola, Express con TypeScript!");
-});
+app.use("/api", scrapyRoutes);
 
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });
-
-app.use("/api", userRoutes);
