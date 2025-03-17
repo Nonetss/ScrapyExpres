@@ -14,10 +14,11 @@ model Model {
 }
 
 model Album {
-  id      Int       @id @default(autoincrement())
-  scraper String
-  modelId Int
-  article Article[]
+  id       Int       @id @default(autoincrement())
+  scraper  String
+  albumUrl String
+  modelId  Int
+  article  Article[]
 
   Model Model @relation(fields: [modelId], references: [id])
 }

@@ -26,21 +26,20 @@ export const saveItem = async (
       });
     }
 
-    // 2. Usamos una combinación de scraper y albumEnlace como identificador único del Album
-    const albumIdentifier = `${scraper}-${albumEnlace}`;
-
     let album = await tx.album.findFirst({
       where: {
-        scraper: albumIdentifier,
+        scraper: scraper,
         modelId: model.id,
+        albumUrl: albumEnlace,
       },
     });
 
     if (!album) {
       album = await tx.album.create({
         data: {
-          scraper: albumIdentifier,
+          scraper: scraper,
           modelId: model.id,
+          albumUrl: albumEnlace,
         },
       });
     }

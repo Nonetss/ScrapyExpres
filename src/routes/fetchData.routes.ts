@@ -1,7 +1,9 @@
 import { Router, Request, Response } from "express";
 import { fetchDataByQuery } from "../service/db/fetchData.service";
+import { PrismaClient } from "@prisma/client";
 
 const router = Router();
+const prisma = new PrismaClient();
 
 router.get(
   "/fetch-data",
@@ -34,4 +36,25 @@ router.get(
   },
 );
 
+// Endpoint para obtener todas las queries buscadas
+router.get("/queries", async (req: Request, res: Response) => {
+  try {
+    // Consultar todas las queries únicas en la tabla Model
+    const queries = await prisma.model.findMany({
+      select: {
+        query: true, // Seleccionar solo el campo 'query'
+      },
+      distinct: ["query"], // Asegurarse de que las queries sean únicas
+    });
+
+    // Extraer solo las queries del resultado
+    const queryList = queries.map((model) => model.query);
+
+    // Devolver la lista de queries
+    res.status(200).json({ queries: queryList });
+  } catch (error) {
+    console.error("Error al obtener las queries:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
 export default router;

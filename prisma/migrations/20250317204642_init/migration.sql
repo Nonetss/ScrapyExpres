@@ -10,6 +10,7 @@ CREATE TABLE "Model" (
 CREATE TABLE "Album" (
     "id" SERIAL NOT NULL,
     "scraper" TEXT NOT NULL,
+    "albumUrl" TEXT NOT NULL,
     "modelId" INTEGER NOT NULL,
 
     CONSTRAINT "Album_pkey" PRIMARY KEY ("id")
