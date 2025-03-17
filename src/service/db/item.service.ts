@@ -78,6 +78,7 @@ export const saveItem = async (
       if (newImages.length > 0) {
         await tx.image.createMany({
           data: newImages,
+          skipDuplicates: true, // Omite duplicados basados en el campo único 'url'
         });
       }
 

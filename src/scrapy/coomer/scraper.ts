@@ -22,7 +22,7 @@ export async function scrapeCoomer(query: string) {
       `🔎 Encontrados ${enlaces.length} enlaces. Visitando uno por uno...`,
     );
 
-    let allData = [];
+    let allData: any[] = [];
 
     for (const enlace of enlaces) {
       console.log(`🔗 Visitando: ${enlace}`);
@@ -31,28 +31,39 @@ export async function scrapeCoomer(query: string) {
       try {
         await page.goto(enlace, { waitUntil: "networkidle", timeout: 60000 });
         await page.waitForSelector("article", { timeout: 10000 });
-
         await page.evaluate(() =>
           window.scrollTo(0, document.body.scrollHeight),
         );
         await page.waitForTimeout(2000);
 
-        let allArticleResults = [];
+        // Procesamos cada página de paginación como un álbum
         let continuarPaginacion = true;
-
         while (continuarPaginacion) {
+          // Usamos la URL actual de la página de paginación como identificador del álbum
+          const currentUrl = page.url();
+
+          // Extraemos los enlaces de artículos de la página actual
           const articleLinks = await page.$$eval(
             "article a.fancy-link--kemono",
             (elements) => elements.map((el) => (el as HTMLAnchorElement).href),
           );
 
           console.log(
-            `📌 ${articleLinks.length} artículos encontrados en: ${page.url()}`,
+            `📌 ${articleLinks.length} artículos encontrados en: ${currentUrl}`,
           );
 
-          const resultados = await procesarEnParalelo(articleLinks, browser, 5);
-          allArticleResults.push(...resultados);
+          // Procesamos los artículos en paralelo
+          const articleResults = await procesarEnParalelo(
+            articleLinks,
+            browser,
+            5,
+          );
 
+          // Guardamos el álbum de esta página de paginación
+          await saveItem(query, scraper, currentUrl, articleResults);
+          allData.push({ album: currentUrl, articles: articleResults });
+
+          // Verificamos si existe una siguiente página de paginación
           const nextLinks = await page.$$eval("menu a.next", (elements) =>
             elements.map((el) => (el as HTMLAnchorElement).href),
           );
@@ -79,9 +90,6 @@ export async function scrapeCoomer(query: string) {
             continuarPaginacion = false;
           }
         }
-
-        await saveItem(query, scraper, enlace, allArticleResults);
-        allData.push({ enlace, articles: allArticleResults });
       } catch (error) {
         console.log(
           `⚠ Error en la página ${enlace}: ${(error as Error).message}`,
