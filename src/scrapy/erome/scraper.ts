@@ -32,7 +32,7 @@ export async function scrapeErome(query: string) {
 
         // Una vez cargada la página, extrae las imágenes y videos
         const imagenes: string[] = await page.$$eval(
-          "div img[src]",
+          "div.media-group div.img img[src]",
           (elements) => elements.map((el) => (el as HTMLImageElement).src),
         );
         const videos: string[] = await page.$$eval("video source", (elements) =>

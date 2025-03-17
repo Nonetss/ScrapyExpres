@@ -8,94 +8,91 @@ export async function scrapeBunkr(query: string) {
   const browser = await chromium.launch();
 
   try {
-    // Abrir la página principal de búsqueda
-    const mainPage = await browser.newPage();
-    await mainPage.goto(`https://bunkr-albums.io/?search=${query}`, {
-      waitUntil: "networkidle",
-      timeout: 60000,
-    });
+    // 1. Paginación en la búsqueda principal
+    let currentSearchPage = 1;
+    let searchHasNextPage = true;
+    const allAlbumLinks: string[] = [];
 
-    // Extraer los enlaces de álbumes de la página principal
-    const albumLinks = await mainPage.$$eval("main div div a", (elements) =>
-      elements.map((el) => (el as HTMLAnchorElement).href),
-    );
-    console.log(
-      `🔎 Encontrados ${albumLinks.length} enlaces. Visitando uno por uno...`,
-    );
+    const searchPage = await browser.newPage();
 
+    while (searchHasNextPage) {
+      await searchPage.goto(
+        `https://bunkr-albums.io/?search=${query}&page=${currentSearchPage}`,
+        { waitUntil: "networkidle", timeout: 60000 },
+      );
+
+      // Extraer enlaces de álbumes
+      const albumLinks = await searchPage.$$eval("main div div a", (elements) =>
+        elements.map((el) => (el as HTMLAnchorElement).href),
+      );
+
+      // Si no hay álbumes en la página, detener la paginación
+      if (albumLinks.length === 0) {
+        console.log(
+          `🚫 No se encontraron álbumes en la página ${currentSearchPage}. Deteniendo paginación.`,
+        );
+        searchHasNextPage = false;
+        break;
+      }
+
+      allAlbumLinks.push(...albumLinks);
+      console.log(
+        `🔎 Página ${currentSearchPage}: ${albumLinks.length} álbumes encontrados`,
+      );
+
+      // Verificar si hay siguiente página
+      const nextPageDisabled = await searchPage.$("a.ic-arrow-right.disabled");
+      searchHasNextPage = !nextPageDisabled;
+      currentSearchPage++;
+    }
+
+    await searchPage.close();
+    console.log(`✅ Total de álbumes encontrados: ${allAlbumLinks.length}`);
+
+    // 2. Procesar cada álbum
     let allData: any[] = [];
 
-    // Para cada enlace de álbum, recorremos sus páginas de paginación
-    for (const albumLink of albumLinks) {
-      console.log(`🔗 Visitando álbum: ${albumLink}`);
-      let currentUrl = albumLink; // URL de la página actual (inicia con el enlace del álbum)
-      let albumDataForThisAlbum: any[] = [];
-      let continuePagination = true;
+    for (const albumLink of allAlbumLinks) {
+      console.log(`\n🔗 Procesando álbum: ${albumLink}`);
+      const albumPage = await browser.newPage();
 
-      while (continuePagination) {
-        const page = await browser.newPage();
-        try {
-          await page.goto(currentUrl, {
-            waitUntil: "networkidle",
-            timeout: 60000,
-          });
-          // Espera a que cargue el selector que indica que la página tiene contenido (ajusta según la página)
-          await page.waitForSelector("div.grid div div a", {
-            timeout: 10000,
-            state: "attached",
-          });
+      try {
+        // Obtener contenido principal del álbum
+        await albumPage.goto(albumLink, {
+          waitUntil: "networkidle",
+          timeout: 60000,
+        });
 
-          // Extraer enlaces de artículos de la página actual
-          const articleLinks = await page.$$eval(
-            "div.grid div div a",
-            (elements) => elements.map((el) => (el as HTMLAnchorElement).href),
-          );
-          console.log(
-            `📌 ${articleLinks.length} artículos encontrados en: ${currentUrl}`,
-          );
+        // Procesar elementos del álbum
+        const articleLinks = await albumPage.$$eval(
+          "div.grid div div a",
+          (elements) => elements.map((el) => (el as HTMLAnchorElement).href),
+        );
 
-          // Procesar artículos en paralelo
-          const articleResults = await procesarEnParalelo(
-            articleLinks,
-            browser,
-            5,
-          );
+        // Procesar en paralelo
+        const articleResults = await procesarEnParalelo(
+          articleLinks,
+          browser,
+          5,
+        );
 
-          // Guardar la página actual (como álbum) en la base de datos
-          await saveItem(query, scraper, currentUrl, articleResults);
-          albumDataForThisAlbum.push({
-            album: currentUrl,
-            articles: articleResults,
-          });
-
-          // Buscar enlace a la siguiente página de paginación
-          const nextLinks = await page.$$eval("a.ic-arrow-right", (elements) =>
-            elements.map((el) => (el as HTMLAnchorElement).href),
-          );
-          if (nextLinks.length > 0) {
-            currentUrl = nextLinks[0];
-            console.log(`➡️ Navegando a la siguiente página: ${currentUrl}`);
-          } else {
-            continuePagination = false;
-          }
-        } catch (error) {
-          console.log(
-            `⚠ Error en la página ${currentUrl}: ${(error as Error).message}`,
-          );
-          continuePagination = false;
-        } finally {
-          await page.close();
-        }
+        // Guardar en base de datos
+        await saveItem(query, scraper, albumLink, articleResults);
+        allData.push(...articleResults);
+      } catch (error) {
+        console.log(
+          `⚠ Error procesando álbum ${albumLink}: ${(error as Error).message}`,
+        );
+      } finally {
+        await albumPage.close();
       }
-      // Acumular los datos de este álbum (con todas sus paginaciones)
-      allData.push(...albumDataForThisAlbum);
     }
-    console.log(
-      "✅ Scraping finalizado y datos guardados en la base de datos.",
-    );
+
+    console.log("✅ Scraping finalizado correctamente");
     return allData;
   } catch (error) {
     console.log(`❌ Error durante el scraping: ${(error as Error).message}`);
+    throw error;
   } finally {
     await browser.close();
   }
