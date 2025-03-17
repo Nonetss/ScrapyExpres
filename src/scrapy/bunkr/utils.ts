@@ -6,67 +6,74 @@ export interface ArticleResult {
   videos: string[];
 }
 
+// Función para crear un pool de páginas
+async function crearPool(browser: Browser, poolSize: number): Promise<Page[]> {
+  const pages: Page[] = [];
+  for (let i = 0; i < poolSize; i++) {
+    pages.push(await browser.newPage());
+  }
+  return pages;
+}
+
+// Función para cerrar todas las páginas del pool
+async function cerrarPool(pages: Page[]): Promise<void> {
+  await Promise.all(pages.map((p) => p.close()));
+}
+
+// Función para obtener una página disponible del pool
+async function getPageFromPool(pool: Page[]): Promise<Page> {
+  // Si el pool está vacío, espera un momento hasta que se libere una página
+  while (pool.length === 0) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return pool.pop()!;
+}
+
+// Procesa las URLs en paralelo usando un pool de páginas
 export async function procesarEnParalelo(
   urls: string[],
   browser: Browser,
-  limite: number = 5,
+  poolSize: number = 20,
 ): Promise<ArticleResult[]> {
-  let resultados: ArticleResult[] = [];
-  let tareasActivas: Promise<ArticleResult>[] = [];
+  // Crear el pool de páginas
+  const pool = await crearPool(browser, poolSize);
 
-  for (const url of urls) {
-    const tarea = (async (): Promise<ArticleResult> => {
-      const nuevaPagina: Page = await browser.newPage();
-      try {
-        await nuevaPagina.goto(url, {
-          waitUntil: "networkidle",
-          timeout: 60000,
-        });
-        // Simular scroll para cargar contenido
-        await nuevaPagina.evaluate(() =>
-          window.scrollTo(0, document.body.scrollHeight),
-        );
-        await nuevaPagina.waitForTimeout(2000);
-        // Extraer imágenes y videos
-        const imagenes: string[] = await nuevaPagina.$$eval(
-          "main figure img",
-          (elements: Element[]) =>
-            elements.map((img) => (img as HTMLImageElement).src),
-        );
-        const videos: string[] = await nuevaPagina.$$eval(
-          "video source",
-          (elements: Element[]) =>
-            elements.map((a) => (a as HTMLVideoElement).src),
-        );
-        console.log(
-          `De ${url}: ${videos.length} videos y ${imagenes.length} imágenes`,
-        );
-        return { articleURL: url, imagenes, videos };
-      } catch (error: unknown) {
-        console.log(`⚠ Error al visitar ${url}: ${(error as Error).message}`);
-        return { articleURL: url, imagenes: [], videos: [] };
-      } finally {
-        await nuevaPagina.close();
-      }
-    })();
-
-    tareasActivas.push(tarea);
-
-    if (tareasActivas.length >= limite) {
-      // Envuelve cada promesa para obtener su índice cuando se resuelva.
-      const indexedPromises = tareasActivas.map((p, index) =>
-        p.then((result) => ({ index, result })),
+  // Para cada URL, toma una página del pool, procesa la URL y devuelve la página al pool
+  const tasks = urls.map(async (url) => {
+    const page = await getPageFromPool(pool);
+    try {
+      await page.goto(url, { waitUntil: "networkidle", timeout: 60000 });
+      // Simula scroll para cargar contenido
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      // Extrae imágenes y videos
+      const imagenes: string[] = await page.$$eval(
+        "main figure img",
+        (elements: Element[]) =>
+          elements.map((img) => (img as HTMLImageElement).src),
       );
-      const { index, result } = await Promise.race(indexedPromises);
-      resultados.push(result);
-      // Elimina la promesa que ya se resolvió usando su índice.
-      tareasActivas.splice(index, 1);
+      const videos: string[] = await page.$$eval(
+        "video source",
+        (elements: Element[]) =>
+          elements.map((el) => (el as HTMLVideoElement).src),
+      );
+      console.log(
+        `De ${url}: ${videos.length} videos y ${imagenes.length} imágenes`,
+      );
+      return { articleURL: url, imagenes, videos };
+    } catch (error: unknown) {
+      console.log(`⚠ Error al visitar ${url}: ${(error as Error).message}`);
+      return { articleURL: url, imagenes: [], videos: [] };
+    } finally {
+      // Devuelve la página al pool para reutilizarla
+      pool.push(page);
     }
-  }
+  });
 
-  const ultimosResultados = await Promise.all(tareasActivas);
-  resultados.push(...ultimosResultados);
-  return resultados;
+  // Espera a que todas las tareas se completen
+  const results = await Promise.all(tasks);
+  // Cierra las páginas restantes del pool
+  await cerrarPool(pool);
+  return results;
 }
 
 export async function closeAllOtherPages(mainPage: Page): Promise<void> {
