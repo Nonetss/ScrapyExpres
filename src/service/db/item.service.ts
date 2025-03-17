@@ -94,6 +94,7 @@ export const saveItem = async (
       if (newVideos.length > 0) {
         await tx.video.createMany({
           data: newVideos,
+          skipDuplicates: true, // Omite los registros duplicados basados en el campo único 'url'
         });
       }
     }
