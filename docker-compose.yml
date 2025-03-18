@@ -5,31 +5,31 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: express_backend
+    container_name: scrapy_backend
     depends_on:
       - database_scrapy
     env_file:
       - .env
     ports:
-      - "8008:3000"
+      - "8090:3000"
     restart: unless-stopped
 
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    container_name: astro_frontend
+    container_name: scrapy_frontend
     depends_on:
       - backend
     env_file:
       - .env
     ports:
-      - "4321:4321"
+      - "88:4321"
     restart: unless-stopped
 
   database_scrapy:
     image: postgres:15
-    container_name: postgres_db
+    container_name: scrapy_db
     restart: always
     env_file:
       - .env
