@@ -1,18 +1,42 @@
-version: "3.8"
+version: "3.9"
 
 services:
-  postgres:
-    image: postgres:15
-    container_name: my_postgres
-    restart: always
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: express_backend
+    depends_on:
+      - database_scrapy
+    env_file:
+      - .env
     ports:
-      - "${DB_PORT}:5432"
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "8008:3000"
+    restart: unless-stopped
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: astro_frontend
+    depends_on:
+      - backend
+    env_file:
+      - .env
+    ports:
+      - "4321:4321"
+    restart: unless-stopped
+
+  database_scrapy:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 volumes:
   postgres_data:

@@ -47,8 +47,8 @@ router.get("/queries", async (req: Request, res: Response) => {
       distinct: ["query"], // Asegurarse de que las queries sean únicas
     });
 
-    // Extraer solo las queries del resultado
-    const queryList = queries.map((model) => model.query);
+    // Extraer solo las queries del resultado, asegurando el tipo explícito para "model"
+    const queryList = queries.map((model: { query: string }) => model.query);
 
     // Devolver la lista de queries
     res.status(200).json({ queries: queryList });
@@ -57,4 +57,5 @@ router.get("/queries", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
+
 export default router;
