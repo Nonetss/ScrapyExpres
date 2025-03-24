@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import * as React from "react";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +25,7 @@ import {
 
 import { fetchScrapy } from "@/utils/fetchScrapy";
 import { fetchData } from "@/utils/fetchData";
+import { fetchAllQueries } from "@/utils/fetchQuery";
 
 type Status = {
   value: string;
@@ -117,6 +124,24 @@ export function InputWithButton() {
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [showModal, setShowModal] = useState(false);
+  const [queries, setQueries] = useState<string[]>([]);
+
+  const handleQuery = async () => {
+    setLoadingData(true);
+    setError(null);
+
+    try {
+      const data = await fetchAllQueries();
+      setQueries(data); // ← Guardamos las queries
+      setShowModal(true); // ← Mostramos la modal
+    } catch (error) {
+      console.error("Error al obtener queries:", error);
+      setError("Error al obtener las queries. Intenta de nuevo.");
+    } finally {
+      setLoadingData(false);
+    }
+  };
   // Actualizar la URL cuando cambien los valores
   const updateURL = (model: string, scraper: string) => {
     if (typeof window !== "undefined") {
@@ -200,6 +225,34 @@ export function InputWithButton() {
 
   return (
     <div className="flex w-full items-center space-x-2">
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Queries disponibles</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[300px] overflow-y-auto space-y-1">
+            {queries.length > 0 ? (
+              queries.map((q, i) => (
+                <div
+                  key={i}
+                  className="text-sm border-b border-gray-200 py-1 cursor-pointer hover:text-green-700"
+                  onClick={() => {
+                    setModelName(q);
+                    setShowModal(false);
+                    updateURL(q, selectedScraper?.value || "bunkr");
+                  }}
+                >
+                  {q}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500">
+                No hay queries disponibles.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <Input
         type="text"
         placeholder="Nombre modelo"
@@ -223,6 +276,13 @@ export function InputWithButton() {
         disabled={loadingScrape || loadingData}
       >
         {loadingData ? "Buscando..." : "Buscar"}
+      </Button>
+      <Button
+        type="button"
+        onClick={handleQuery}
+        disabled={loadingScrape || loadingData}
+      >
+        {loadingData ? "Buscando..." : "Query"}
       </Button>
       {error && <p className="text-red-500">{error}</p>}
     </div>
