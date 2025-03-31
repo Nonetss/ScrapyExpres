@@ -2,7 +2,6 @@ import { Router, Request, Response } from "express";
 import { scrapeCoomer } from "../scrapy/coomer/scraper";
 import { scrapeBunkr } from "../scrapy/bunkr/scraper";
 import { scrapeErome } from "../scrapy/erome/scraper";
-import { scrapeFapello } from "../scrapy/fapello/scraper";
 
 const router = Router();
 
