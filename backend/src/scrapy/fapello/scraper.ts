@@ -16,11 +16,11 @@ export async function scrapeFapello(query: string) {
         });
 
         // Esperamos a que aparezcan los enlaces
-        await mainPage.waitForSelector("div.bg-red-400.max-w-full a", {
+        await mainPage.waitForSelector("div div a", {
             timeout: 30000,
         });
 
-        const enlaces = await mainPage.$$eval("div.bg-red-400.max-w-full a", (elements) =>
+        const enlaces = await mainPage.$$eval("div div a", (elements) =>
             elements.map((el) => (el as HTMLAnchorElement).href),
         );
         console.log(`🔎 Encontrados ${enlaces.length} enlaces. Visitando uno por uno...`);
