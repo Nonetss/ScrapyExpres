@@ -37,7 +37,7 @@ const statuses: Status[] = [
   { value: "erome", label: "erome" },
   { value: "coomer", label: "coomer" },
   { value: "bunkr", label: "bunkr" },
-  { value: "todos", label: "todos" },
+  { value: "fapello", label: "fapello" },
 ];
 
 // Componente Scraper
