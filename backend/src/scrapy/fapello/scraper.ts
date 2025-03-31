@@ -4,89 +4,106 @@ import { saveItem } from "../../service/db/item.service";
 export async function scrapeFapello(query: string) {
     console.log(`📌 Iniciando scraping para la query: ${query}`);
     const scraper = "fapello";
-    const browser = await chromium.launch();
+    const browser = await chromium.launch({
+        timeout: 120000, // Aumentamos el timeout global a 2 minutos
+    });
 
     try {
         const mainPage = await browser.newPage();
         await mainPage.goto(`https://fapello.com/search/${query}`, {
-            waitUntil: "networkidle",
+            waitUntil: "domcontentloaded", // Cambiamos a domcontentloaded en lugar de networkidle
             timeout: 60000,
         });
 
-        // Extraer enlaces de álbumes (donde el álbum y el artículo son la misma URL)
+        // Esperamos a que aparezcan los enlaces
+        await mainPage.waitForSelector("div.bg-red-400.max-w-full a", {
+            timeout: 30000,
+        });
+
         const enlaces = await mainPage.$$eval("div.bg-red-400.max-w-full a", (elements) =>
             elements.map((el) => (el as HTMLAnchorElement).href),
         );
-        console.log(
-            `🔎 Encontrados ${enlaces.length} enlaces. Visitando uno por uno...`,
-        );
+        console.log(`🔎 Encontrados ${enlaces.length} enlaces. Visitando uno por uno...`);
 
         let allData: any[] = [];
 
         for (const enlace of enlaces) {
             console.log(`🔗 Visitando: ${enlace}`);
             const page = await browser.newPage();
+
             try {
-                // Navega a la URL del álbum
-                await page.goto(enlace);
+                // Configuramos timeouts más específicos
+                await page.setDefaultTimeout(60000);
+                await page.setDefaultNavigationTimeout(60000);
 
-                // Implementar scroll infinito
-                let previousHeight = 0;
-                let currentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+                // Intentamos navegar con reintentos
+                let attempts = 0;
+                const maxAttempts = 3;
 
-                while (previousHeight !== currentHeight) {
-                    previousHeight = currentHeight;
-
-                    // Hacer scroll hasta el final de la página
-                    await page.evaluate(() => {
-                        window.scrollTo(0, document.documentElement.scrollHeight);
-                    });
-
-                    // Esperar a que se cargue nuevo contenido
-                    await page.waitForTimeout(1000); // Espera 2 segundos
-
-                    // Obtener la nueva altura
-                    currentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+                while (attempts < maxAttempts) {
+                    try {
+                        await page.goto(enlace, {
+                            waitUntil: "domcontentloaded",
+                            timeout: 60000,
+                        });
+                        break; // Si tiene éxito, salimos del bucle
+                    } catch (error) {
+                        attempts++;
+                        console.log(`Intento ${attempts} fallido para ${enlace}`);
+                        if (attempts === maxAttempts) throw error;
+                        await new Promise(resolve => setTimeout(resolve, 5000)); // Espera 5 segundos entre intentos
+                    }
                 }
 
-                // Una vez completado el scroll, extraer las imágenes y videos
-                const imagenes: string[] = await page.$$eval(
+                // Scroll con timeout más largo
+                let previousHeight = 0;
+                let currentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+                let scrollAttempts = 0;
+                const maxScrollAttempts = 10;
+
+                while (previousHeight !== currentHeight && scrollAttempts < maxScrollAttempts) {
+                    previousHeight = currentHeight;
+                    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+                    await page.waitForTimeout(2000);
+                    currentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+                    scrollAttempts++;
+                }
+
+                // Extraer contenido
+                const imagenes = await page.$$eval(
                     "div a div img[src]",
                     (elements) => elements.map((el) => (el as HTMLImageElement).src),
                 );
-                const videos: string[] = await page.$$eval("video source", (elements) =>
-                    elements.map((el) => (el as HTMLSourceElement).src),
-                );
-                console.log(
-                    `Extraídos ${imagenes.length} imágenes y ${videos.length} videos en: ${enlace}`,
+                const videos = await page.$$eval(
+                    "video source",
+                    (elements) => elements.map((el) => (el as HTMLSourceElement).src),
                 );
 
-                // Guardar en la base de datos:
-                // En este caso, album y article son la misma URL, y se crea un artículo único.
-                await saveItem(query, scraper, enlace, [
-                    { articleURL: enlace, imagenes, videos },
-                ]);
+                console.log(`Extraídos ${imagenes.length} imágenes y ${videos.length} videos en: ${enlace}`);
 
-                allData.push({
-                    album: enlace,
-                    articles: [{ articleURL: enlace, imagenes, videos }],
-                });
+                if (imagenes.length > 0 || videos.length > 0) {
+                    await saveItem(query, scraper, enlace, [
+                        { articleURL: enlace, imagenes, videos },
+                    ]);
+
+                    allData.push({
+                        album: enlace,
+                        articles: [{ articleURL: enlace, imagenes, videos }],
+                    });
+                }
             } catch (error) {
-                console.log(
-                    `⚠ Error en la página ${enlace}: ${(error as Error).message}`,
-                );
+                console.log(`⚠ Error en la página ${enlace}: ${(error as Error).message}`);
             } finally {
-                await page.close();
+                await page.close().catch(() => { }); // Ignoramos errores al cerrar la página
             }
         }
 
-        console.log(
-            "✅ Scraping finalizado y datos guardados en la base de datos.",
-        );
+        console.log("✅ Scraping finalizado y datos guardados en la base de datos.");
         return allData;
     } catch (error) {
         console.log(`❌ Error durante el scraping: ${(error as Error).message}`);
+        return [];
     } finally {
-        await browser.close();
+        await browser.close().catch(() => { }); // Ignoramos errores al cerrar el navegador
     }
 }
