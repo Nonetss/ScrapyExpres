@@ -20,9 +20,8 @@ export async function scrapeFapello(query: string) {
             timeout: 30000,
         });
 
-        const enlaces = await mainPage.$$eval("div[id] a", (elements) =>
-            elements.map((el) => (el as HTMLAnchorElement).href),
-        );
+        const enlaces = `https://fapello.com/${query}`
+
         console.log(`🔎 Encontrados ${enlaces.length} enlaces. Visitando uno por uno...`);
 
         let allData: any[] = [];
