@@ -16,7 +16,7 @@ export async function scrapeFapello(query: string) {
         });
 
         // Esperamos a que aparezcan los enlaces
-        await mainPage.waitForSelector("div[id] > div > div > div > a", {
+        await mainPage.waitForSelector("div[id='content'] a", {
             timeout: 30000,
         });
 
