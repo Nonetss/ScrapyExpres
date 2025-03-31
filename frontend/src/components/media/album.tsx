@@ -34,6 +34,7 @@ export function Album() {
   const [albums, setAlbums] = useState<AlbumData[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [viewportHeight, setViewportHeight] = useState(0);
+  const [visibleItems, setVisibleItems] = useState(new Set());
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -55,6 +56,26 @@ export function Album() {
         window.removeEventListener("resize", updateViewportHeight);
       };
     }
+  }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setVisibleItems((prev) => new Set([...prev, entry.target.dataset.mediaId]));
+          }
+        });
+      },
+      {
+        rootMargin: '50px',
+      }
+    );
+
+    const elements = document.querySelectorAll('.media-container');
+    elements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
   }, []);
 
   // Función para obtener todos los medios ordenados (videos primero)
@@ -180,7 +201,7 @@ export function Album() {
                         {sortedMedia.map((media, index) => (
                           <CarouselItem key={`${media.type}-${media.data.id}`}>
                             <div className="p-2">
-                              <div className="relative bg-background rounded-xl shadow-lg overflow-hidden group">
+                              <div className="relative bg-background rounded-xl shadow-lg overflow-hidden group media-container" data-media-id={`${media.type}-${media.data.id}`}>
                                 {media.type === "video" ? (
                                   <div
                                     className="relative"
@@ -254,7 +275,7 @@ export function Album() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 py-4">
                     {sortArticlesByMedia(album.article).map((article) => (
                       <div key={article.id} className="space-y-4">
-                        <div className="bg-background rounded-xl shadow-lg overflow-hidden group">
+                        <div className="bg-background rounded-xl shadow-lg overflow-hidden group media-container" data-media-id={`article-${article.id}`}>
                           {article.videos.map((video) => (
                             <div
                               key={video.id}
